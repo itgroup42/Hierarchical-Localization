@@ -12,8 +12,8 @@ def main(
         output: Path,
         image_list: Optional[Union[Path, List[str]]] = None,
         features: Optional[Path] = None,
-        ref_list: Optional[Union[Path, List[str]]] = None,
-        ref_features: Optional[Path] = None):
+        window_size: int = 10,
+        loop: bool = False):
 
     if image_list is not None:
         if isinstance(image_list, (str, Path)):
@@ -27,27 +27,18 @@ def main(
     else:
         raise ValueError('Provide either a list of images or a feature file.')
 
-    self_matching = False
-    if ref_list is not None:
-        if isinstance(ref_list, (str, Path)):
-            names_ref = parse_image_lists(ref_list)
-        elif isinstance(image_list, collections.Iterable):
-            names_ref = list(ref_list)
-        else:
-            raise ValueError(
-                f'Unknown type for reference image list: {ref_list}')
-    elif ref_features is not None:
-        names_ref = list_h5_names(ref_features)
-    else:
-        self_matching = True
-        names_ref = names_q
-
     pairs = []
-    for i, n1 in enumerate(names_q):
-        for j, n2 in enumerate(names_ref):
-            if self_matching and j <= i:
-                continue
-            pairs.append((n1, n2))
+    tot = len(names_q)
+
+    if loop:
+        for i in range(tot):
+            for j in range(i + 1, i + window_size):
+                pairs.append((names_q[i - tot], names_q[j - tot]))
+
+    else:
+        for i in range(tot - 1):
+            for j in range(i + 1, min(i + window_size, tot)): 
+                pairs.append((names_q[i], names_q[j]))
 
     logger.info(f'Found {len(pairs)} pairs.')
     with open(output, 'w') as f:
@@ -55,11 +46,11 @@ def main(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Create a list of image pairs based on the sequence of images on alphabetic order")
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--image_list', type=Path)
     parser.add_argument('--features', type=Path)
-    parser.add_argument('--ref_list', type=Path)
-    parser.add_argument('--ref_features', type=Path)
+    parser.add_argument('--window_size', type=int, default=4, help="Size of the window of images to match")
+    parser.add_argument('--loop', action="store_true", help="Create a loop sequence (last elements matched with first ones)")
     args = parser.parse_args()
     main(**args.__dict__)
